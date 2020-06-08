@@ -1,0 +1,40 @@
+---
+title: "Quantified Self Movement - Prediction"
+author: "Richard"
+date: "6/8/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r download data}
+if (!file.exists("data")) {
+        dir.create("data")
+}
+
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "./data/train_data.csv")
+
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "./data/test_data.csv")
+```
+
+
+```{r load data}
+train_data <-
+        read.csv(
+                "./data/train_data.csv",
+                header = TRUE,
+                na.strings = c("", "NA"),
+                stringsAsFactors = FALSE
+        )
+
+testing_data <-
+        read.csv(
+                "./data/test_data.csv",
+                header = TRUE,
+                na.strings = c("", "NA"),
+                stringsAsFactors = FALSE
+        )
+```
+
