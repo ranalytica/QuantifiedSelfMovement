@@ -2,39 +2,185 @@
 title: "Quantified Self Movement - Prediction"
 author: "Richard"
 date: "6/8/2020"
-output: html_document
+output: 
+  html_document:
+    keep_md: true
+    toc: true
+    toc_float: true
+    code_folding: show
 ---
 
-```{r setup, include=FALSE}
+![Github](./Octocat.png) [view mycode](https://github.com/ranalytica/QuantifiedSelfMovement){target="_blank"} 
+
+![Rpubs](./rpubs.png) [view website](https://rpubs.com/Ranalytica/MotorTrend)
+```{r setup, include=FALSE, echo=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the **belt, forearm, arm, and dumbell** of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+## Environment
+
+```{r Info, message=FALSE}
+library(caret)
+library(tidyverse)
+library(ggcorrplot)
+library(lubridate)
+library(doParallel)
+library(rattle)
+
+sessionInfo()
+```
+
+### Load Data
 
 ```{r download data}
 if (!file.exists("data")) {
         dir.create("data")
 }
 
-download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "./data/train_data.csv")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "./data/pml-training.csv")
 
-download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "./data/test_data.csv")
-```
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "./data/pml-testing.csv")
 
-
-```{r load data}
 train_data <-
         read.csv(
-                "./data/train_data.csv",
+                "./data/pml-training.csv",
                 header = TRUE,
-                na.strings = c("", "NA"),
-                stringsAsFactors = FALSE
+                na.strings = c(""," ", "NA","#DIV/0!")
         )
 
 testing_data <-
         read.csv(
-                "./data/test_data.csv",
+                "./data/pml-testing.csv",
                 header = TRUE,
-                na.strings = c("", "NA"),
-                stringsAsFactors = FALSE
+                na.strings = c(""," ", "NA", "#DIV/0!")
         )
 ```
+
+```{r}
+str(train_data)
+dim(train_data)
+
+
+
+```
+
+
+```{r Quick NA Analysis}
+naAnalysis <- train_data %>%
+    purrr::map_df(function(x) round(mean(is.na(x)),digits = 2)*100) %>%
+    gather(EVType, naAverage)
+
+naAnalysis %>% ggplot(aes(x = EVType, y = naAverage)) %>% +
+  geom_point(aes(reorder(EVType, naAverage))) + theme(axis.text.x =
+              element_text(angle = 90, hjust = .1)) + labs(x = "Event Type", 
+              y = "NA Average  (%)", title = "Missing Data Analysis")
+```
+Remove NA
+```{r}
+list_NA <-naAnalysis %>% filter(naAverage >0)
+
+training_set <- train_data %>% select(-list_NA$EVType)
+dim(training_set)
+sum(is.na(training_set))
+str(training_set)
+
+train_set <- training_set %>% select(-c(1:7))
+
+dim(training_set)       
+sum(is.na(training_set))
+```
+
+
+Partition the data
+```{r}
+set.seed(420)
+final_set <- createDataPartition(train_set$classe, p=.75, list= FALSE)
+
+training_ls <-train_set[final_set,]
+
+testing_ls <- train_set[-final_set,]
+
+dim(training_ls)
+dim(testing_ls)
+
+
+```
+
+
+```{r cache=TRUE}
+set.seed(420)
+cl <- makePSOCKcluster(5)
+registerDoParallel(cl)
+
+modelfit <- train(data=training_ls, classe~., method="rf")
+modelfit
+stopCluster(cl)
+```
+
+```{r}
+modelfit$finalModel
+
+```
+```{r}
+final_prediction <- predict(modelfit, newdata = testing_ls)
+testing_ls$classe<-as.factor(testing_ls$classe)
+confusionMatrix(final_prediction, testing_ls$classe)
+```
+
+```{r message=FALSE}
+set.seed(420)
+cl <- makePSOCKcluster(5)
+registerDoParallel(cl)
+
+modelfit_nb <- train(data=training_ls, classe~., method="nb")
+
+stopCluster(cl)
+
+```
+
+```{r message=FALSE}
+set.seed(420)
+cl <- makePSOCKcluster(5)
+registerDoParallel(cl)
+
+prediction_nb <- predict(modelfit_nb, newdata = testing_ls)
+table(final_prediction, prediction_nb)
+
+confusionMatrix(prediction_nb, testing_ls$classe)
+stopCluster(cl)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
