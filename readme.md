@@ -139,7 +139,7 @@ naAnalysis %>% ggplot(aes(x = EVType, y = naAverage)) %>% +
               y = "NA Average  (%)", title = "Missing Data Analysis")
 ```
 
-![](index_files/figure-html/Quick.png)<!-- -->
+![](index_files/figure-html/quick.png)<!-- -->
 
 There are more than 50% of variables with greater than 98% missing values.  We will proceed in removing them in out analysis. 
 
