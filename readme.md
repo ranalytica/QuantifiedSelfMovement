@@ -139,7 +139,7 @@ naAnalysis %>% ggplot(aes(x = EVType, y = naAverage)) %>% +
               y = "NA Average  (%)", title = "Missing Data Analysis")
 ```
 
-![](index_files/figure-html/Quick NA Analysis-1.png)<!-- -->
+![](index_files/figure-html/Quick.png)<!-- -->
 
 There are more than 50% of variables with greater than 98% missing values.  We will proceed in removing them in out analysis. 
 
@@ -196,7 +196,7 @@ registerDoParallel(cl)
 ggpairs(data = train_set, columns = 1:6, ggplot2::aes(colour = classe, alpha=.3))
 ```
 
-![](index_files/figure-html/1st visual-1.png)<!-- -->
+![](index_files/figure-html/1.png)<!-- -->
 
 ```r
 # change columns numbers to see remaining correlation pair plot 
