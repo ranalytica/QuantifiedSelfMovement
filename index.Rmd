@@ -37,12 +37,10 @@ The data for this project come from this source: http://web.archive.org/web/2016
 
 ```{r Info, message=FALSE}
 library(caret)
+library(mlbench)
 library(tidyverse)
-library(ggcorrplot)
-library(lubridate)
 library(doParallel)
-library(rattle)
-
+library(GGally)
 sessionInfo()
 ```
 
@@ -53,33 +51,29 @@ if (!file.exists("data")) {
         dir.create("data")
 }
 
-download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "./data/pml-training.csv")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+              destfile = "./data/pml-training.csv")
 
-download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "./data/pml-testing.csv")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+              destfile = "./data/pml-testing.csv")
 
-train_data <-
-        read.csv(
+train_data <-read.csv(
                 "./data/pml-training.csv",
                 header = TRUE,
-                na.strings = c(""," ", "NA","#DIV/0!")
-        )
+                na.strings = c(""," ", "NA","#DIV/0!"))
 
-testing_data <-
-        read.csv(
+testing_data <- read.csv(
                 "./data/pml-testing.csv",
                 header = TRUE,
-                na.strings = c(""," ", "NA", "#DIV/0!")
-        )
+                na.strings = c(""," ", "NA", "#DIV/0!"))
 ```
 
-```{r}
+```{r hide, results='hide', echo=FALSE} 
 str(train_data)
 dim(train_data)
-
-
-
 ```
 
+## Missing Values Analysis
 
 ```{r Quick NA Analysis}
 naAnalysis <- train_data %>%
@@ -91,24 +85,57 @@ naAnalysis %>% ggplot(aes(x = EVType, y = naAverage)) %>% +
               element_text(angle = 90, hjust = .1)) + labs(x = "Event Type", 
               y = "NA Average  (%)", title = "Missing Data Analysis")
 ```
-Remove NA
-```{r}
+There are more than 50% of variables with greater than 98% missing values.  We will proceed in removing them in out analysis. 
+```{r processing data}
 list_NA <-naAnalysis %>% filter(naAverage >0)
+# data frame showing our variables with missing values
 
 training_set <- train_data %>% select(-list_NA$EVType)
-dim(training_set)
-sum(is.na(training_set))
-str(training_set)
-
+# removing variables with missing values
 train_set <- training_set %>% select(-c(1:7))
-
-dim(training_set)       
-sum(is.na(training_set))
+dim(train_set)
 ```
 
+## Visualization
 
-Partition the data
-```{r}
+The data are group in 4 separated in 13 variables. See below:
+
+```{r grouping}
+belt<-names(train_set)[1:13]
+"arm"<-names(train_set)[14:26]
+dumbbell<-names(train_set)[27:39]
+forearm<-names(train_set)[40:52]
+data.frame(belt, arm, dumbbell, forearm)
+```
+
+We can visualize the correlation using ggpairs using GGally package as follows:
+```{r 1st visual, message=FALSE, cache=TRUE}
+cl <- makePSOCKcluster(5)
+registerDoParallel(cl)
+
+ggpairs(data = train_set, columns = 1:6, ggplot2::aes(colour = classe, alpha=.3))
+# change columns numbers to see remaining correlation pair plot 
+# i.e. columns = 7:13
+stopCluster(cl)
+```
+
+Variables 40:46
+
+```{r visual, message=FALSE, cache=TRUE}
+cl <- makePSOCKcluster(5)
+registerDoParallel(cl)
+
+ggpairs(data = train_set, columns = 40:46, ggplot2::aes(colour = classe, alpha=.3))
+# change columns numbers to see remaining correlation pair plot 
+# i.e. columns = 6:10
+stopCluster(cl)
+```
+
+## Slice Data
+
+We will use createDataPartition function from the caret package to split the data 75/25, training and test respectively.
+
+```{r create partiion}
 set.seed(420)
 final_set <- createDataPartition(train_set$classe, p=.75, list= FALSE)
 
@@ -118,32 +145,42 @@ testing_ls <- train_set[-final_set,]
 
 dim(training_ls)
 dim(testing_ls)
-
-
 ```
 
+## Modeling.
 
-```{r cache=TRUE}
+We will use Random Forest and Naive bayes to construct our model.  We will not add any traincontrol in our model and simply accept the default values. We will also use doparallel package to use all cpu cores to speed up the process.  I've been researching gpu access without any luck. gputools and gpuR seem to have been archieved and cannot use it on r 4.0 version.  
+
+## Random Forest (rf) Model
+
+```{r rf model, cache=TRUE}
 set.seed(420)
 cl <- makePSOCKcluster(5)
 registerDoParallel(cl)
 
 modelfit <- train(data=training_ls, classe~., method="rf")
-modelfit
+
 stopCluster(cl)
 ```
 
-```{r}
-modelfit$finalModel
+## Top 10 Predictors (random forest)
 
+```{r variable importance}
+g1<- plot(varImp(modelfit), top = 10, main = "Fig.a - Top 10 Predictors for Classe")
+g1
 ```
-```{r}
+
+## Prediction and Confusion Matrix
+
+```{r predict and confs matrix}
 final_prediction <- predict(modelfit, newdata = testing_ls)
 testing_ls$classe<-as.factor(testing_ls$classe)
 confusionMatrix(final_prediction, testing_ls$classe)
 ```
 
-```{r message=FALSE}
+## Naive Bayes Model
+
+```{r nb model, message=FALSE}
 set.seed(420)
 cl <- makePSOCKcluster(5)
 registerDoParallel(cl)
@@ -151,20 +188,50 @@ registerDoParallel(cl)
 modelfit_nb <- train(data=training_ls, classe~., method="nb")
 
 stopCluster(cl)
-
 ```
 
-```{r message=FALSE}
+
+
+```{r nb prediction model, message=FALSE, warning=FALSE}
 set.seed(420)
-cl <- makePSOCKcluster(5)
-registerDoParallel(cl)
 
 prediction_nb <- predict(modelfit_nb, newdata = testing_ls)
 table(final_prediction, prediction_nb)
 
 confusionMatrix(prediction_nb, testing_ls$classe)
-stopCluster(cl)
+
 ```
+
+The accuracy of our nb is .74 vs. rf at .99.  We will run both predictions on our testing_data we downloaded from the web and compare.  We do not have the variable classe in our testing_data.  
+
+## Final Answer
+
+modelfit which uses random forest "rf" model has a better fit compared with naives bayes "nb".  
+```{r prediction comparison, warning=FALSE, message=FALSE}
+Done_rf <- (predict(modelfit, newdata = testing_data))
+Done_nb <- (predict(modelfit_nb, newdata = testing_data))
+```
+
+## Random Forest results
+
+```{r rf, warning=FALSE, message=FALSE}
+Done_rf
+table(Done_rf)
+```
+
+## Naive Bayes results
+
+```{r nb, warning=FALSE, message=FALSE}
+Done_nb
+table(Done_nb)
+```
+
+## RF vs. NB comparison
+
+```{r rf v nb, warning=FALSE, message=FALSE}
+table(Done_rf, Done_nb)
+```
+
 
 
 
